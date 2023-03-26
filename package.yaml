@@ -1,0 +1,12 @@
+name: table 
+version: 0.0.0
+homepage: https://github.com/morloclib/table
+synopsis: Core functions for table processing
+description: A stub for table processing
+category: basic
+license: MIT
+author: "Zebulun Arendsee"
+maintainer: "zbwrnz@gmail.com"
+github: https://github.com/morloclib/table
+bug-reports: https://github.com/morloclib/table
+gcc-flags: "c++17"

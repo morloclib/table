@@ -1,0 +1,72 @@
+module table
+
+export Table
+export columnsT
+export filterOnT
+export headT
+export ncolT
+export nrowT
+export printT
+export removeColumnsT
+export reverseT
+export selectColumnsT
+export sortOnT
+export writeTsv
+
+packTable   :: pack   => ([Str], [[Str]]) -> Table
+unpackTable :: unpack => Table -> ([Str], [[Str]])
+
+packTable   Py :: pack   => (["str"], [["str"]]) -> "pd.Dataframe"
+unpackTable Py :: unpack => "pd.Dataframe" -> (["str"], [["str"]])
+
+packTable   R :: pack   => (["character"], [["character"]]) -> "data.frame"
+unpackTable R :: unpack => "data.frame" -> (["character"], [["character"]])
+
+source Py from "table.py"
+    ( "packTable",
+    , "unpackTable",
+    , "columnsT"
+    , "filterOnT"
+    , "headT"
+    , "ncolT"
+    , "nrowT"
+    , "printT"
+    , "removeColumnsT"
+    , "reverseT"
+    , "selectColumnsT"
+    , "sortOnT"
+    , "writeTsv"
+    )
+
+source R from "table.R"
+    ( "packTable",
+    , "unpackTable",
+    , "columnsT"
+    , "filterOnT"
+    , "headT"
+    , "ncol" as ncolT
+    , "nrow" as nrowT
+    , "printT"
+    , "removeColumnsT"
+    , "reverseT"
+    , "selectColumnsT"
+    , "sortOnT"
+    , "writeTsv"
+    )
+
+headT :: Int -> Table -> Table
+nrowT :: Table -> Int
+ncolT :: Table -> Int
+
+sortOnT :: [Str] -> Table -> Table
+reverseT :: Table -> Table
+
+columnsT :: Table -> [Str]
+selectColumnsT :: [Str] -> Table -> Table
+removeColumnsT :: [Str] -> Table -> Table
+
+filterOnT :: Str -> (a -> Bool) -> Table -> Table
+
+printT :: Table -> ()
+
+writeTsv :: Table -> Filename -> ()
