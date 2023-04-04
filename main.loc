@@ -1,49 +1,36 @@
-module table
+module table (*)
 
-export Table
-export columnsT
-export filterOnT
-export headT
-export ncolT
-export nrowT
-export printT
-export removeColumnsT
-export reverseT
-export selectColumnsT
-export sortOnT
-export writeTsv
+type Filename = Str
+type Py Filename = "str"
+type R Filename = "character"
+
+type Py Table = "pd.Dataframe"
+type R Table = "data.frame"
 
 packTable   :: pack   => ([Str], [[Str]]) -> Table
 unpackTable :: unpack => Table -> ([Str], [[Str]])
 
-packTable   Py :: pack   => (["str"], [["str"]]) -> "pd.Dataframe"
-unpackTable Py :: unpack => "pd.Dataframe" -> (["str"], [["str"]])
+packTable   Py :: pack   => (["str"], [["str"]]) -> Table
+unpackTable Py :: unpack => Table -> (["str"], [["str"]])
 
-packTable   R :: pack   => (["character"], [["character"]]) -> "data.frame"
-unpackTable R :: unpack => "data.frame" -> (["character"], [["character"]])
+packTable   R :: pack   => (["character"], [["character"]]) -> Table
+unpackTable R :: unpack => Table -> (["character"], [["character"]])
 
 source Py from "table.py"
-    ( "packTable",
-    , "unpackTable",
-    , "columnsT"
-    , "filterOnT"
+    ( "packTable"
+    , "unpackTable"
     , "headT"
     , "ncolT"
-    , "nrowT"
-    , "printT"
-    , "removeColumnsT"
-    , "reverseT"
-    , "selectColumnsT"
-    , "sortOnT"
-    , "writeTsv"
+    , "nrow"
     )
 
 source R from "table.R"
-    ( "packTable",
-    , "unpackTable",
+    ( "packTable"
+    , "unpackTable"
     , "columnsT"
     , "filterOnT"
     , "headT"
+    , "iris"
     , "ncol" as ncolT
     , "nrow" as nrowT
     , "printT"
@@ -54,19 +41,50 @@ source R from "table.R"
     , "writeTsv"
     )
 
+iris :: Table
+iris Py :: Table
+iris R :: Table
+
 headT :: Int -> Table -> Table
+headT Py :: "int" -> Table -> Table
+headT R :: "integer" -> Table -> Table
+
 nrowT :: Table -> Int
+nrowT Py :: Table -> "int"
+nrowT R :: Table -> "integer"
+
 ncolT :: Table -> Int
+ncolT Py :: Table -> "int"
+ncolT R :: Table -> "integer"
 
 sortOnT :: [Str] -> Table -> Table
+sortOnT Py :: ["str"] -> Table -> Table
+sortOnT R :: ["character"] -> Table -> Table
+
 reverseT :: Table -> Table
+reverseT Py :: Table -> Table
+reverseT R :: Table -> Table
 
 columnsT :: Table -> [Str]
+columnsT Py :: Table -> ["str"]
+columnsT R :: Table -> ["character"]
+
 selectColumnsT :: [Str] -> Table -> Table
+selectColumnsT Py :: ["str"] -> Table -> Table
+selectColumnsT R :: ["character"] -> Table -> Table
+
 removeColumnsT :: [Str] -> Table -> Table
+removeColumnsT Py :: ["str"] -> Table -> Table
+removeColumnsT R :: ["character"] -> Table -> Table
 
 filterOnT :: Str -> (a -> Bool) -> Table -> Table
+filterOnT Py :: "str" -> (a -> "bool") -> Table -> Table
+filterOnT R :: "character" -> (a -> "logical") -> Table -> Table
 
 printT :: Table -> ()
+printT Py :: Table -> ()
+printT R :: Table -> ()
 
 writeTsv :: Table -> Filename -> ()
+writeTsv Py :: Table -> Filename -> ()
+writeTsv R :: Table -> Filename -> ()

@@ -1,3 +1,6 @@
+# imports the iris data set
+data(iris)
+
 # packTable   R :: pack   => (["character"], [["character"]]) -> "data.frame"
 packTable <- function(x){
     names(x[[2]]) <- x[[1]]
