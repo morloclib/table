@@ -4,14 +4,14 @@ import io
 #  packTable   Py :: pack   => (["str"], [["str"]]) -> ""
 def packTable(serial):
     tableStr = "\n".join([",".join(row) for row in serial[1]])
-    table = pd.read_csv(io.StringIO(tableStr), header=serial[0])
+    table = pd.read_csv(io.StringIO(tableStr), names=serial[0])
     return table
 
 #  unpackTable Py :: unpack => "" -> (["str"], [["str"]])
 def unpackTable(table):
-    columnNames = "[" + ",".join(['"' + c + '"' for c in table.columns]) + "]"
-    rows = table.to_json(orient="values")
-    return "".join(["[", columnNames, ",", rows, "]"])
+    columnNames = list(map(str, table.columns))
+    rows = list(table.apply(lambda xs: list(map(str, xs)), axis=1).iloc(0))
+    return (columnNames, rows)
 
 
 # headT :: Int -> Table -> Table
