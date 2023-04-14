@@ -1,8 +1,11 @@
-module table (*)
+module table (Table, iris, headT, ncolT, nrowT, run)
+
+import rbase (run, Int, Real, Str)
+import pybase (run, Int, Real, Str)
 
 type Filename = Str
-type Py Filename = "str"
-type R Filename = "character"
+type Py Filename = Str
+type R Filename = Str
 
 type Py Table = "pd.Dataframe"
 type R Table = "data.frame"
@@ -30,7 +33,7 @@ source R from "table.R"
     , "columnsT"
     , "filterOnT"
     , "headT"
-    , "iris"
+    , "load_iris" as iris
     , "ncol" as ncolT
     , "nrow" as nrowT
     , "printT"
@@ -39,47 +42,26 @@ source R from "table.R"
     , "selectColumnsT"
     , "sortOnT"
     , "writeTsv"
+    , "run"
     )
 
-iris :: Table
-iris Py :: Table
-iris R :: Table
+run    :: (() -> a) -> a
+run Py :: (() -> a) -> a
+run R  :: (() -> a) -> a
+
+iris :: () -> Table
+iris Py :: () -> Table
+iris R :: () -> Table
 
 headT :: Int -> Table -> Table
-headT Py :: "int" -> Table -> Table
-headT R :: "integer" -> Table -> Table
-
 nrowT :: Table -> Int
-nrowT Py :: Table -> "int"
-nrowT R :: Table -> "integer"
-
 ncolT :: Table -> Int
-ncolT Py :: Table -> "int"
-ncolT R :: Table -> "integer"
-
 sortOnT :: [Str] -> Table -> Table
-sortOnT Py :: ["str"] -> Table -> Table
-sortOnT R :: ["character"] -> Table -> Table
-
 reverseT :: Table -> Table
-reverseT Py :: Table -> Table
-reverseT R :: Table -> Table
-
 columnsT :: Table -> [Str]
-columnsT Py :: Table -> ["str"]
-columnsT R :: Table -> ["character"]
-
 selectColumnsT :: [Str] -> Table -> Table
-selectColumnsT Py :: ["str"] -> Table -> Table
-selectColumnsT R :: ["character"] -> Table -> Table
-
 removeColumnsT :: [Str] -> Table -> Table
-removeColumnsT Py :: ["str"] -> Table -> Table
-removeColumnsT R :: ["character"] -> Table -> Table
-
 filterOnT :: Str -> (a -> Bool) -> Table -> Table
-filterOnT Py :: "str" -> (a -> "bool") -> Table -> Table
-filterOnT R :: "character" -> (a -> "logical") -> Table -> Table
 
 printT :: Table -> ()
 printT Py :: Table -> ()

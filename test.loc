@@ -1,0 +1,7 @@
+module testTable (*)
+
+import rbase (run)
+
+import table (headT, iris)
+
+irisHead = headT 2 (run iris)

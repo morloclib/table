@@ -1,6 +1,14 @@
 # imports the iris data set
 data(iris)
 
+run <- function(f){
+    f()
+}
+
+load_iris <- function(){
+    iris
+}
+
 # packTable   R :: pack   => (["character"], [["character"]]) -> "data.frame"
 packTable <- function(x){
     names(x[[2]]) <- x[[1]]
@@ -17,9 +25,9 @@ columnsT <- function(df){
     names(df)
 }
 
-#  filterOnT :: Str -> (a -> Bool) -> Table -> Table
-filterOnT <- function(colname, f, df){
-    df[sapply(df[[colname]], f), ]
+# filterOnT :: Str -> (a -> Bool) -> Table -> Table
+filterOnT <- function(column, f, table) {
+  table[f(table[[column]]), ]
 }
 
 #  headT :: Int -> Table -> Table
@@ -34,21 +42,21 @@ removeColumnsT <- function(colnames, df){
 
 #  selectColumnsT :: [Str] -> Table -> Table
 selectColmnsT <- function(colnames, df){
-    df[, colnames]
+    df[, colnames, drop=FALSE]
 }
 
 #  reverseT :: Table -> Table
 reverseT <- function(df){
     if (nrow(df) > 0){
-        df[rev(1:nrow(df)), ]
+        df[nrow(df):1, ]
     } else {
         df
     }
 }
 
-#  sortOnT :: [Str] -> Table -> Table
-sortOnT <- function(colnames, df){
-    df[do.call(order, lapply(colanmes, function(n) df[[n]])), ]
+# sortOnT :: [Str] -> Table -> Table
+sortOnT <- function(columns, table) {
+    table[do.call(order, table[columns]), ]
 }
 
 #  writeTsv :: Table -> Filename -> ()
