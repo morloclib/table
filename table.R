@@ -60,6 +60,6 @@ sortOnT <- function(columns, table) {
 }
 
 #  writeTsv :: Table -> Filename -> ()
-writeTsv <- function(df, filename){
+writeTsv <- function(filename, df){
     write.csv(df, file=filename, sep="\t")
 }
