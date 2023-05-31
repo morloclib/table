@@ -13,6 +13,11 @@ def unpackTable(table):
     rows = list(table.apply(lambda xs: list(map(str, xs)), axis=1).iloc(0))
     return (columnNames, rows)
 
+def readTsv(filename):
+    return pd.read_csv(filename)
+
+def writeTsv(filename, table):
+    table.to_csv(filename, sep="\t")
 
 # headT :: Int -> Table -> Table
 def headT(n, table):

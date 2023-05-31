@@ -1,11 +1,8 @@
-module table (Table, iris, headT, ncolT, nrowT, run)
+module table (Table, iris, headT, ncolT, nrowT, run, readTsv, writeTsv)
 
-import rbase (run, Int, Real, Str)
-import pybase (run, Int, Real, Str)
-
-type Filename = Str
-type Py Filename = Str
-type R Filename = Str
+import conventions (Int, Real, Str, Filename, Unit)
+import rbase (run)
+import pybase (run)
 
 type Py Table = "pd.Dataframe"
 type R Table = "data.frame"
@@ -25,6 +22,8 @@ source Py from "table.py"
     , "headT"
     , "ncolT"
     , "nrow"
+    , "readTsv"
+    , "writeTsv"
     )
 
 source R from "table.R"
@@ -42,6 +41,7 @@ source R from "table.R"
     , "selectColumnsT"
     , "sortOnT"
     , "writeTsv"
+    , "readTsv"
     , "run"
     )
 
@@ -64,9 +64,5 @@ removeColumnsT :: [Str] -> Table -> Table
 filterOnT :: Str -> (a -> Bool) -> Table -> Table
 
 printT :: Table -> ()
-printT Py :: Table -> ()
-printT R :: Table -> ()
-
-writeTsv    :: Filename -> Table -> ()
-writeTsv Py :: Filename -> Table -> ()
-writeTsv R  :: Filename -> Table -> ()
+writeTsv :: Filename -> Table -> ()
+readTsv :: Filename -> Table
