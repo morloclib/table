@@ -4,8 +4,8 @@ import conventions (Int, Real, Str, Filename, Unit)
 import rbase (run)
 import pybase (run)
 
-type Py Table = "pd.Dataframe"
-type R Table = "data.frame"
+type Py => Table = "pd.Dataframe"
+type R => Table = "data.frame"
 
 packTable   :: pack   => ([Str], [[Str]]) -> Table
 unpackTable :: unpack => Table -> ([Str], [[Str]])
