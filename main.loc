@@ -1,6 +1,6 @@
 module table (Table, iris, headT, ncolT, nrowT, run, readTsv, writeTsv)
 
-import conventions (Int, Real, Str, Filename, Unit)
+import types (Int, Real, Str, Filename, Unit)
 import rbase (run)
 import pybase (run)
 
