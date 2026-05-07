@@ -1,5 +1,5 @@
 name: table
-version: 0.1.0
+version: 0.2.0
 homepage: https://github.com/morloclib/table
 synopsis: Tabular data with Apache Arrow wire format
 description: Builtin Table type and operations. Cross-language tables passed by zero-copy Arrow C Data Interface.
