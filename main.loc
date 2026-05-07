@@ -1,0 +1,124 @@
+module table (*)
+
+import root
+import vector
+
+--' A tabular data structure backed by Apache Arrow. The phantom Nat slot
+--' carries the row count; the phantom Rec slot carries the column-name/type
+--' schema. Cross-language transfer is zero-copy via the Arrow C Data
+--' Interface.
+--' metavar: TABLE
+type Table (n :: Nat) (r :: Rec)
+
+-- Convert a vector into a single-column table whose column carries the
+-- given name. The label `f:Str` lifts the runtime column name into the
+-- type-level row schema. Future column-source variants (Map values, etc.)
+-- will live behind a `ColumnLike` typeclass once class methods support
+-- literal-label lifting.
+asCol :: f:Str -> Vector n a -> Table n (Singleton f a)
+
+-------------------------------------------------------------------------------
+-- Introspection
+
+-- Runtime row count. The type-level Nat n is preserved through the call
+-- (it's still phantom; this exposes the runtime value).
+nrow :: Table n r -> Int
+
+-- Runtime column count.
+ncol :: Table n r -> Int
+
+-- Runtime list of column names, in column order.
+names :: Table n r -> [Str]
+
+
+-------------------------------------------------------------------------------
+-- Row operations
+--
+-- Schema is preserved across all row-only operations. Operations that may
+-- change row count return Table m r with a fresh m (the caller annotates
+-- m or lets it stay polymorphic).
+
+-- Take rows in the half-open range [start, end). Identical semantics to
+-- `slice` from root's Indexed typeclass:
+--   sliceRows 0 0 t == empty
+--   sliceRows 0 1 t == one-row table containing the first row
+--   sliceRows 0 (nrow t) t == the whole table
+--   sliceRows i j t with j <= i returns empty (no reverse)
+--   sliceRows i j t with j > nrow t silently clamps end to nrow t
+--   sliceRows i j t with i >= nrow t returns empty
+-- Subsumes the historical head/tail/reverseRows operations:
+--   head k t       == sliceRows 0 k t
+--   tail k t       == sliceRows (nrow t - k) (nrow t) t
+sliceRows :: start:Int -> end:Int -> Table n r -> Table m r
+
+-- Boolean-mask row selection. `m` is the count of True entries in the
+-- mask. The mask must have the same length as the table.
+filterRows :: Vector n Bool -> Table n r -> Table m r
+
+-- Gather rows by integer indices. The result has one row per index, in
+-- the order given. Indices may repeat or be out of original order;
+-- out-of-range indices error at runtime. Subsumes reverseRows (note that
+-- morloc's `range a b` is closed at both endpoints):
+--   reverseRows t == pickRows (reverse (range 0 (nrow t - 1))) t
+pickRows :: Vector m Int -> Table n r -> Table m r
+
+-- Deduplicate rows. Equality compares whole rows structurally.
+distinctRows :: Table n r -> Table m r
+
+-- Sort by one or more columns. The Bool flag per column gives the sort
+-- direction: True = ascending, False = descending. Stable sort.
+-- Caveat: the type system does not currently enforce that every column
+-- name in the spec appears in `r`; runtime error on missing column.
+sortRows :: [(Str, Bool)] -> Table n r -> Table n r
+
+
+-------------------------------------------------------------------------------
+-- Column operations
+
+-- Extract a named column as a Vector. The result element type is
+-- determined by `ProjectField r f` -- a type-level lookup that reduces
+-- to the column's type when r is ground. Compile-time error if `f` is
+-- absent in `r`.
+getCol :: f:Str -> Table n r -> Vector n (ProjectField r f)
+
+-- Set or replace a column. The label `f:Str` introduces `f` as both the
+-- runtime column name and a type-level Str variable. The result schema
+-- drops any prior `f` binding and adds the new one, so this works
+-- whether `f` is in `r` or not. The implicit Disjoint constraint on the
+-- rightmost `+` discharges trivially because (r - f) is by construction
+-- f-free.
+setCol :: f:Str -> Vector n a -> Table n r -> Table n ((r - f) + Singleton f a)
+
+-- Drop columns by literal-list label. Drop-of-absent is benign per
+-- element, matching the type-level (r - l) semantics. Subsumes the
+-- historical single-column drop:
+--   dropCol f t == dropCols [f] t
+dropCols :: l:[Str] -> Table n r -> Table n (r - l)
+
+-- Project to columns by literal-list label, in the order given. The
+-- implicit Subset constraint emitted from `Restrict r l` ensures every
+-- requested column exists in r; a missing column is a typecheck error.
+selectCols :: l:[Str] -> Table n r -> Table n (Restrict r l)
+
+-- Runtime [Str] projection (escape hatch). The result column schema
+-- cannot be tracked at the type level; the output's row type is a free
+-- Rec variable that the caller is responsible for binding (typically by
+-- routing into another table-typed function). Use selectCols instead
+-- when the column names are known statically.
+selectColsDyn :: [Str] -> Table n r1 -> Table n r2
+
+-- Rename a single column. Result schema drops `f` and adds `g` at the
+-- same type. Compile-time error if `f` is absent in `r`.
+renameCol :: f:Str -> g:Str -> Table n r -> Table n ((r - f) + Singleton g (ProjectField r f))
+
+
+-------------------------------------------------------------------------------
+-- Concatenation
+
+-- Concatenate two tables row-wise. Both tables must share a column
+-- schema r; the row count of the result is the sum of input row counts.
+rbind :: Table n1 r -> Table n2 r -> Table (n1 + n2) r
+
+-- Concatenate two tables column-wise. Tables must have the same row
+-- count n and disjoint column schemas; the output schema is the union.
+cbind :: Table n r1 -> Table n r2 -> Table n (r1 + r2)

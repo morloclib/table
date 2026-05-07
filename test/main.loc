@@ -1,0 +1,376 @@
+module table.test (test)
+
+import table
+import vector
+import root
+
+-------------------------------------------------------------------------------
+-- Type mappings for the Python pool that hosts the test framework.
+--
+-- The test framework's sourced helpers (testEqual, printMsg, printResult)
+-- receive table values over the wire as pyarrow.RecordBatch (the wire form
+-- of a morloc Table in Python). Other languages running the suite (R, C++)
+-- send their tables across the Arrow C Data Interface to the Python pool,
+-- where they arrive as RecordBatch and are compared structurally.
+--
+-- Vector maps to "numpy.ndarray" to stay consistent with vector-py (which
+-- table-py transitively imports); morloc_setCol accepts a numpy array
+-- directly, and the test framework's structural comparator reduces it to a
+-- list before comparing column data.
+
+type Py => Int = "int"
+type Py => Str = "str"
+type Py => Real = "float"
+type Py => Bool = "bool"
+type Py => Tuple2 a b = "tuple" a b
+type Py => List a = "list" a
+type Py => (Vector (n :: Nat) a) = "list" a
+type Py => (Table (n :: Nat) (r :: Rec)) = "arrow" n r
+
+-------------------------------------------------------------------------------
+-- Test framework
+
+source Py from "table-test.py" ("testEqual", "printMsg", "printResult")
+testEqual
+    :: Str
+    -> a
+    -> a
+    -> (Int, Int)
+    -> (Int, Int)
+printMsg :: Str -> a -> a
+printResult :: (Int, Int) -> (Int, Int)
+
+testGroup
+    :: Str
+    -> ((Int, Int) -> (Int, Int))
+    -> (Int, Int)
+    -> (Int, Int)
+testGroup msg tests = tests . printMsg msg
+
+passed :: (Int, Int) -> Bool
+passed t = 0 == (.0 t)
+
+test = runTests (0,0)
+
+-------------------------------------------------------------------------------
+-- Shared fixtures
+--
+-- Build canonical 3-row tables under stable schemas so cross-operation
+-- equalities can be expressed without re-binding values everywhere. The
+-- schemas grow rightward by composition: mkX -> mkXY -> mkXYZ.
+
+xs3 :: Vector 3 Int
+xs3 = [0, 1, 2]
+
+ys3 :: Vector 3 Str
+ys3 = ["0", "1", "2"]
+
+zs3 :: Vector 3 Real
+zs3 = [0.0, 0.5, 1.0]
+
+mkX :: Int -> Table n {x = Int}
+mkX n = asCol "x" xs3
+
+mkY :: Int -> Table n {y = Str}
+mkY n = asCol "y" ys3
+
+mkZ :: Int -> Table n {z = Real}
+mkZ n = asCol "z" zs3
+
+mkXY :: Int -> Table n {x = Int, y = Str}
+mkXY n = setCol "y" ys3 (asCol "x" xs3)
+
+mkXYZ3 :: Table n {x = Int, y = Str, z = Real}
+mkXYZ3 = setCol "z" zs3 (setCol "y" ys3 (asCol "x" xs3))
+
+-------------------------------------------------------------------------------
+-- Test suite
+--
+-- Group composition is right-to-left, so the printed order matches this
+-- block read top-to-bottom only after reversal.
+
+runTests :: (Int, Int) -> Bool
+runTests =
+  ( passed
+  . printResult
+  . testGroup "Composition / derived" testDerived
+  . testGroup "rbind / cbind"         testConcat
+  . testGroup "renameCol"             testRenameCol
+  . testGroup "selectColsDyn"         testSelectColsDyn
+  . testGroup "selectCols"            testSelectCols
+  . testGroup "dropCols"              testDropCols
+  . testGroup "setCol"                testSetCol
+  . testGroup "getCol"                testGetCol
+  . testGroup "sortRows"              testSortRows
+  . testGroup "distinctRows"          testDistinctRows
+  . testGroup "pickRows"              testPickRows
+  . testGroup "filterRows"            testFilterRows
+  . testGroup "sliceRows"             testSliceRows
+  . testGroup "names"                 testNames
+  . testGroup "asCol / nrow / ncol"   testAsCol
+  )
+
+-------------------------------------------------------------------------------
+-- asCol + introspection
+testAsCol :: (Int, Int) -> (Int, Int)
+testAsCol =
+  ( testEqual "asCol \"x\" xs3 == mkX 3"
+        (asCol "x" xs3) (mkX 3)
+  . testEqual "asCol from List literal"
+        (asCol "y" (["0", "1", "2"] :: Vector 3 Str)) (mkY 3)
+  . testEqual "nrow (mkX 3) = 3"
+        (nrow (mkX 3)) 3
+  . testEqual "ncol (mkXYZ3) = 3"
+        (ncol mkXYZ3) 3
+  )
+
+-------------------------------------------------------------------------------
+-- names
+testNames :: (Int, Int) -> (Int, Int)
+testNames =
+  ( testEqual "names (mkX 3) = [\"x\"]"
+        (names (mkX 3)) ["x"]
+  . testEqual "names mkXYZ3 = [\"x\", \"y\", \"z\"]"
+        (names mkXYZ3) ["x", "y", "z"]
+  )
+
+-------------------------------------------------------------------------------
+-- sliceRows
+--
+-- Mirrors the root Indexed.slice tests case-for-case. sliceRows takes
+-- (start, end) with the half-open convention [start, end), so the
+-- behavior on out-of-range, reversed, and zero-length intervals is
+-- locked to the same rules as `slice` on lists.
+testSliceRows :: (Int, Int) -> (Int, Int)
+testSliceRows =
+  let row0 = [0]       :: Vector 1 Int
+      row1 = [1]       :: Vector 1 Int
+      row2 = [2]       :: Vector 1 Int
+      row01 = [0, 1]   :: Vector 2 Int
+      row12 = [1, 2]   :: Vector 2 Int
+      row012 = [0, 1, 2] :: Vector 3 Int
+      t = mkX 3   -- column "x" = [0, 1, 2]
+  in
+  ( testEqual "sliceRows 0 0 t == empty"
+        (nrow (sliceRows 0 0 t)) 0
+  . testEqual "sliceRows 0 0 t preserves schema"
+        (names (sliceRows 0 0 t)) ["x"]
+  . testEqual "sliceRows 0 1 t == [0]"
+        (sliceRows 0 1 t) (asCol "x" row0 :: Table 1 {x = Int})
+  . testEqual "sliceRows 0 2 t == [0, 1]"
+        (sliceRows 0 2 t) (asCol "x" row01 :: Table 2 {x = Int})
+  . testEqual "sliceRows 0 3 t == full table"
+        (sliceRows 0 3 t) (asCol "x" row012 :: Table 3 {x = Int})
+  . testEqual "sliceRows 1 0 t == empty (end < start, no reverse)"
+        (nrow (sliceRows 1 0 t)) 0
+  . testEqual "sliceRows 1 1 t == empty (end == start)"
+        (nrow (sliceRows 1 1 t)) 0
+  . testEqual "sliceRows 1 2 t == [1] (single row)"
+        (sliceRows 1 2 t) (asCol "x" row1 :: Table 1 {x = Int})
+  . testEqual "sliceRows 1 3 t == [1, 2]"
+        (sliceRows 1 3 t) (asCol "x" row12 :: Table 2 {x = Int})
+  . testEqual "sliceRows 1 4 t == [1, 2] (end past nrow, clamped)"
+        (sliceRows 1 4 t) (asCol "x" row12 :: Table 2 {x = Int})
+  . testEqual "sliceRows 2 3 t == [2] (last row)"
+        (sliceRows 2 3 t) (asCol "x" row2 :: Table 1 {x = Int})
+  . testEqual "sliceRows 3 4 t == empty (start at end)"
+        (nrow (sliceRows 3 4 t)) 0
+  . testEqual "sliceRows 5 9 t == empty (start past end)"
+        (nrow (sliceRows 5 9 t)) 0
+  -- Preservation across non-Int columns: slice {y=Str} the same way.
+  . testEqual "sliceRows 1 3 (mkY 3) == ys3[1..2]"
+        (sliceRows 1 3 (mkY 3))
+        (asCol "y" (["1", "2"] :: Vector 2 Str) :: Table 2 {y = Str})
+  )
+
+-------------------------------------------------------------------------------
+-- filterRows
+testFilterRows :: (Int, Int) -> (Int, Int)
+testFilterRows =
+  let allTrue  = [True,  True,  True]  :: Vector 3 Bool
+      allFalse = [False, False, False] :: Vector 3 Bool
+      mixed    = [True,  False, True]  :: Vector 3 Bool
+      xs2 = [0, 2] :: Vector 2 Int
+  in
+  ( testEqual "filterRows allTrue (mkX 3) == mkX 3"
+        (filterRows allTrue (mkX 3) :: Table 3 {x = Int}) (mkX 3)
+  . testEqual "filterRows allFalse (mkX 3) nrow = 0"
+        (nrow (filterRows allFalse (mkX 3))) 0
+  . testEqual "filterRows mixed (mkX 3) keeps positions 0, 2"
+        (filterRows mixed (mkX 3)) (asCol "x" xs2 :: Table 2 {x = Int})
+  . testEqual "filterRows allFalse preserves schema"
+        (names (filterRows allFalse (mkX 3))) ["x"]
+  )
+
+-------------------------------------------------------------------------------
+-- pickRows
+testPickRows :: (Int, Int) -> (Int, Int)
+testPickRows =
+  let identity = [0, 1, 2] :: Vector 3 Int
+      reversed = [2, 1, 0] :: Vector 3 Int
+      duped    = [0, 0, 1, 1, 2, 2] :: Vector 6 Int
+      onePick  = [1] :: Vector 1 Int
+
+      reversedX = [2, 1, 0] :: Vector 3 Int
+      dupedX    = [0, 0, 1, 1, 2, 2] :: Vector 6 Int
+      oneX      = [1] :: Vector 1 Int
+  in
+  ( testEqual "pickRows identity (mkX 3) == mkX 3"
+        (pickRows identity (mkX 3) :: Table 3 {x = Int}) (mkX 3)
+  . testEqual "pickRows reversed (mkX 3) reverses"
+        (pickRows reversed (mkX 3)) (asCol "x" reversedX :: Table 3 {x = Int})
+  . testEqual "pickRows duped (mkX 3) duplicates rows"
+        (pickRows duped (mkX 3)) (asCol "x" dupedX :: Table 6 {x = Int})
+  . testEqual "pickRows [1] (mkX 3) picks the middle row"
+        (pickRows onePick (mkX 3)) (asCol "x" oneX :: Table 1 {x = Int})
+  )
+
+-------------------------------------------------------------------------------
+-- distinctRows
+testDistinctRows :: (Int, Int) -> (Int, Int)
+testDistinctRows =
+  let allDup3   = [7, 7, 7] :: Vector 3 Int
+      allDupTbl = asCol "x" allDup3 :: Table 3 {x = Int}
+      mixed5    = [1, 2, 1, 3, 2] :: Vector 5 Int
+      mixedTbl  = asCol "x" mixed5 :: Table 5 {x = Int}
+      uniq3     = [1, 2, 3] :: Vector 3 Int
+      uniqTbl   = asCol "x" uniq3 :: Table 3 {x = Int}
+      one1      = [7] :: Vector 1 Int
+  in
+  ( testEqual "distinctRows of all-distinct (mkX 3) == mkX 3"
+        (distinctRows (mkX 3)) (mkX 3)
+  . testEqual "distinctRows of all-dup [7,7,7] == [7]"
+        (distinctRows allDupTbl) (asCol "x" one1 :: Table 1 {x = Int})
+  . testEqual "distinctRows of [1,2,1,3,2] == [1,2,3]"
+        (distinctRows mixedTbl) uniqTbl
+  )
+
+-------------------------------------------------------------------------------
+-- sortRows
+testSortRows :: (Int, Int) -> (Int, Int)
+testSortRows =
+  let xsR = [2, 1, 0] :: Vector 3 Int
+  in
+  ( testEqual "sortRows [(\"x\", True)] (mkX 3) == mkX 3 (already asc)"
+        (sortRows [("x", True)] (mkX 3)) (mkX 3)
+  . testEqual "sortRows [(\"x\", True)] of [2, 1, 0] == mkX 3"
+        (sortRows [("x", True)] (asCol "x" xsR :: Table 3 {x = Int})) (mkX 3)
+  . testEqual "sortRows [(\"x\", False)] (mkX 3) reverses"
+        (sortRows [("x", False)] (mkX 3))
+        (asCol "x" xsR :: Table 3 {x = Int})
+  . testEqual "sortRows [] (mkX 3) is a no-op"
+        (sortRows [] (mkX 3)) (mkX 3)
+  )
+
+-------------------------------------------------------------------------------
+-- getCol
+testGetCol :: (Int, Int) -> (Int, Int)
+testGetCol =
+  ( testEqual "getCol \"x\" (mkX 3) == xs3"
+        (getCol "x" (mkX 3) :: Vector 3 Int) xs3
+  . testEqual "getCol \"y\" mkXYZ3 == ys3"
+        (getCol "y" mkXYZ3 :: Vector 3 Str) ys3
+  . testEqual "getCol \"z\" mkXYZ3 == zs3"
+        (getCol "z" mkXYZ3 :: Vector 3 Real) zs3
+  )
+
+-------------------------------------------------------------------------------
+-- setCol
+testSetCol :: (Int, Int) -> (Int, Int)
+testSetCol =
+  let zsR = [9.0, 9.0, 9.0] :: Vector 3 Real
+      replaced = setCol "z" zsR mkXYZ3 :: Table 3 {x = Int, y = Str, z = Real}
+      expectReplaced = setCol "z" zsR (mkXY 3) :: Table 3 {x = Int, y = Str, z = Real}
+  in
+  ( testEqual "setCol \"y\" ys (mkX 3) == mkXY 3 (append new column)"
+        (setCol "y" ys3 (mkX 3)) (mkXY 3)
+  . testEqual "setCol \"z\" zs (mkXY 3) == mkXYZ3 (append new column)"
+        (setCol "z" zs3 (mkXY 3)) mkXYZ3
+  . testEqual "setCol \"z\" newZs mkXYZ3 replaces the existing z column"
+        replaced expectReplaced
+  )
+
+-------------------------------------------------------------------------------
+-- dropCols
+testDropCols :: (Int, Int) -> (Int, Int)
+testDropCols =
+  ( testEqual "dropCols [\"z\"] mkXYZ3 == mkXY 3"
+        (dropCols ["z"] mkXYZ3) (mkXY 3)
+  . testEqual "dropCols [\"x\", \"z\"] mkXYZ3 == mkY 3"
+        (dropCols ["x", "z"] mkXYZ3) (mkY 3)
+  . testEqual "dropCols [\"absent\"] (mkX 3) == mkX 3 (no-op)"
+        (dropCols ["absent"] (mkX 3)) (mkX 3)
+  )
+
+-------------------------------------------------------------------------------
+-- selectCols
+testSelectCols :: (Int, Int) -> (Int, Int)
+testSelectCols =
+  ( testEqual "selectCols [\"x\"] (mkXY 3) == mkX 3"
+        (selectCols ["x"] (mkXY 3)) (mkX 3)
+  . testEqual "selectCols [\"y\"] (mkXY 3) == mkY 3"
+        (selectCols ["y"] (mkXY 3)) (mkY 3)
+  . testEqual "selectCols [\"x\", \"y\"] mkXYZ3 == mkXY 3"
+        (selectCols ["x", "y"] mkXYZ3) (mkXY 3)
+  )
+
+-------------------------------------------------------------------------------
+-- selectColsDyn
+testSelectColsDyn :: (Int, Int) -> (Int, Int)
+testSelectColsDyn =
+  ( testEqual "selectColsDyn [\"x\"] mkXYZ3 == mkX 3"
+        (selectColsDyn ["x"] mkXYZ3 :: Table 3 {x = Int}) (mkX 3)
+  . testEqual "selectColsDyn [\"y\", \"z\"] mkXYZ3 keeps two columns"
+        (ncol (selectColsDyn ["y", "z"] mkXYZ3 :: Table 3 {y = Str, z = Real})) 2
+  )
+
+-------------------------------------------------------------------------------
+-- renameCol
+testRenameCol :: (Int, Int) -> (Int, Int)
+testRenameCol =
+  ( testEqual "renameCol \"x\" \"a\" (mkX 3) renames"
+        (renameCol "x" "a" (mkX 3)) (asCol "a" xs3 :: Table 3 {a = Int})
+  . testEqual "rename then getCol round-trip"
+        (getCol "a" (renameCol "x" "a" (mkX 3)) :: Vector 3 Int) xs3
+  )
+
+-------------------------------------------------------------------------------
+-- rbind / cbind
+testConcat :: (Int, Int) -> (Int, Int)
+testConcat =
+  let xs6 = [0, 1, 2, 0, 1, 2] :: Vector 6 Int
+      doubled = asCol "x" xs6 :: Table 6 {x = Int}
+  in
+  ( testEqual "rbind (mkX 3) (mkX 3) nrow = 6"
+        (nrow (rbind (mkX 3) (mkX 3))) 6
+  . testEqual "rbind (mkX 3) (mkX 3) == doubled column"
+        (rbind (mkX 3) (mkX 3)) doubled
+  . testEqual "cbind (mkX 3) (mkY 3) ncol = 2"
+        (ncol (cbind (mkX 3) (mkY 3))) 2
+  . testEqual "cbind (mkX 3) (mkY 3) == mkXY 3"
+        (cbind (mkX 3) (mkY 3)) (mkXY 3)
+  )
+
+-------------------------------------------------------------------------------
+-- Composition / derived primitives
+--
+-- Every removed primitive (head, tail, reverseRows) is reproduced via the
+-- new surface to verify the operation set is genuinely orthogonal.
+
+testDerived :: (Int, Int) -> (Int, Int)
+testDerived =
+  let xs2  = [0, 1] :: Vector 2 Int
+      tail2 = [1, 2] :: Vector 2 Int
+      rev3  = [2, 1, 0] :: Vector 3 Int
+      t = mkX 3
+  in
+  ( testEqual "head k t == sliceRows 0 k t"
+        (sliceRows 0 2 t) (asCol "x" xs2 :: Table 2 {x = Int})
+  . testEqual "tail k t == sliceRows (nrow t - k) (nrow t) t"
+        (sliceRows (nrow t - 2) (nrow t) t) (asCol "x" tail2 :: Table 2 {x = Int})
+  -- Composition replacing reverseRows. Note: `range a b` is closed at
+  -- both endpoints, so we pass (nrow t - 1) not (nrow t).
+  . testEqual "reverseRows t == pickRows (reverse (range 0 (nrow t - 1))) t"
+        (pickRows (reverse (range 0 (nrow t - 1))) t)
+        (asCol "x" rev3 :: Table 3 {x = Int})
+  )
