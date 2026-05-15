@@ -57,9 +57,9 @@ filterRows :: Vector n Bool -> Table n r -> Table m r
 
 -- Gather rows by integer indices. The result has one row per index, in
 -- the order given. Indices may repeat or be out of original order;
--- out-of-range indices error at runtime. Subsumes reverseRows (note that
--- morloc's `range a b` is closed at both endpoints):
---   reverseRows t == pickRows (reverse (range 0 (nrow t - 1))) t
+-- out-of-range indices error at runtime. Subsumes reverseRows (morloc's
+-- `range a b` is the half-open interval [a, b)):
+--   reverseRows t == pickRows (reverse (range 0 (nrow t))) t
 pickRows :: Vector m Int -> Table n r -> Table m r
 
 -- Deduplicate rows. Equality compares whole rows structurally.

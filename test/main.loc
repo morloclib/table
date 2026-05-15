@@ -368,9 +368,9 @@ testDerived =
         (sliceRows 0 2 t) (asCol "x" xs2 :: Table 2 {x = Int})
   . testEqual "tail k t == sliceRows (nrow t - k) (nrow t) t"
         (sliceRows (nrow t - 2) (nrow t) t) (asCol "x" tail2 :: Table 2 {x = Int})
-  -- Composition replacing reverseRows. Note: `range a b` is closed at
-  -- both endpoints, so we pass (nrow t - 1) not (nrow t).
-  . testEqual "reverseRows t == pickRows (reverse (range 0 (nrow t - 1))) t"
-        (pickRows (reverse (range 0 (nrow t - 1))) t)
+  -- Composition replacing reverseRows. `range a b` is the half-open
+  -- interval [a, b), so the upper bound is nrow t.
+  . testEqual "reverseRows t == pickRows (reverse (range 0 (nrow t))) t"
+        (pickRows (reverse (range 0 (nrow t))) t)
         (asCol "x" rev3 :: Table 3 {x = Int})
   )
