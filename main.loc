@@ -11,11 +11,11 @@ import vector
 type Table (n :: Nat) (r :: Rec)
 
 -- Convert a vector into a single-column table whose column carries the
--- given name. The label `f:Str` lifts the runtime column name into the
+-- given name. The label `f@Str` lifts the runtime column name into the
 -- type-level row schema. Future column-source variants (Map values, etc.)
 -- will live behind a `ColumnLike` typeclass once class methods support
 -- literal-label lifting.
-asCol :: f:Str -> Vector n a -> Table n (Singleton f a)
+asCol :: f@Str -> Vector n a -> Table n (Singleton f a)
 
 -------------------------------------------------------------------------------
 -- Introspection
@@ -49,7 +49,7 @@ names :: Table n r -> [Str]
 -- Subsumes the historical head/tail/reverseRows operations:
 --   head k t       == sliceRows 0 k t
 --   tail k t       == sliceRows (nrow t - k) (nrow t) t
-sliceRows :: start:Int -> end:Int -> Table n r -> Table m r
+sliceRows :: start@Int -> end@Int -> Table n r -> Table m r
 
 -- Boolean-mask row selection. `m` is the count of True entries in the
 -- mask. The mask must have the same length as the table.
@@ -79,26 +79,26 @@ sortRows :: [(Str, Bool)] -> Table n r -> Table n r
 -- determined by `ProjectField r f` -- a type-level lookup that reduces
 -- to the column's type when r is ground. Compile-time error if `f` is
 -- absent in `r`.
-getCol :: f:Str -> Table n r -> Vector n (ProjectField r f)
+getCol :: f@Str -> Table n r -> Vector n (ProjectField r f)
 
--- Set or replace a column. The label `f:Str` introduces `f` as both the
+-- Set or replace a column. The label `f@Str` introduces `f` as both the
 -- runtime column name and a type-level Str variable. The result schema
 -- drops any prior `f` binding and adds the new one, so this works
 -- whether `f` is in `r` or not. The implicit Disjoint constraint on the
 -- rightmost `+` discharges trivially because (r - f) is by construction
 -- f-free.
-setCol :: f:Str -> Vector n a -> Table n r -> Table n ((r - f) + Singleton f a)
+setCol :: f@Str -> Vector n a -> Table n r -> Table n ((r - f) + Singleton f a)
 
 -- Drop columns by literal-list label. Drop-of-absent is benign per
 -- element, matching the type-level (r - l) semantics. Subsumes the
 -- historical single-column drop:
 --   dropCol f t == dropCols [f] t
-dropCols :: l:[Str] -> Table n r -> Table n (r - l)
+dropCols :: l@[Str] -> Table n r -> Table n (r - l)
 
 -- Project to columns by literal-list label, in the order given. The
 -- implicit Subset constraint emitted from `Restrict r l` ensures every
 -- requested column exists in r; a missing column is a typecheck error.
-selectCols :: l:[Str] -> Table n r -> Table n (Restrict r l)
+selectCols :: l@[Str] -> Table n r -> Table n (Restrict r l)
 
 -- Runtime [Str] projection (escape hatch). The result column schema
 -- cannot be tracked at the type level; the output's row type is a free
@@ -109,7 +109,7 @@ selectColsDyn :: [Str] -> Table n r1 -> Table n r2
 
 -- Rename a single column. Result schema drops `f` and adds `g` at the
 -- same type. Compile-time error if `f` is absent in `r`.
-renameCol :: f:Str -> g:Str -> Table n r -> Table n ((r - f) + Singleton g (ProjectField r f))
+renameCol :: f@Str -> g@Str -> Table n r -> Table n ((r - f) + Singleton g (ProjectField r f))
 
 
 -------------------------------------------------------------------------------
