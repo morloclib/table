@@ -81,13 +81,19 @@ sortRows :: [(Str, Bool)] -> Table n r -> Table n r
 -- absent in `r`.
 getCol :: f@Str -> Table n r -> Vector n (ProjectField r f)
 
--- Set or replace a column. The label `f@Str` introduces `f` as both the
--- runtime column name and a type-level Str variable. The result schema
--- drops any prior `f` binding and adds the new one, so this works
--- whether `f` is in `r` or not. The implicit Disjoint constraint on the
--- rightmost `+` discharges trivially because (r - f) is by construction
--- f-free.
-setCol :: f@Str -> Vector n a -> Table n r -> Table n ((r - f) + Singleton f a)
+-- Replace an existing column, in place. `l` and `r` are the columns to
+-- the left and right of `f`; both are preserved, so the column keeps its
+-- position. The label `f@Str` pins the split -- a field name occurs at
+-- most once, so `l` and `r` are determined -- which is what lets the type
+-- say that exactly one column changed and nothing moved.
+--
+-- The column must already exist. Use `addCol` to append a new one.
+setCol :: f@Str -> Vector n a -> Table n (l + Singleton f b + r)
+                             -> Table n (l + Singleton f a + r)
+
+-- Append a new column after the existing ones. The Disjoint obligation
+-- carried by `+` is what rejects a name the table already has.
+addCol :: f@Str -> Vector n a -> Table n r -> Table n (r + Singleton f a)
 
 -- Drop columns by literal-list label. Drop-of-absent is benign per
 -- element, matching the type-level (r - l) semantics. Subsumes the
@@ -107,9 +113,12 @@ selectCols :: l@[Str] -> Table n r -> Table n (Restrict r l)
 -- when the column names are known statically.
 selectColsDyn :: [Str] -> Table n r1 -> Table n r2
 
--- Rename a single column. Result schema drops `f` and adds `g` at the
--- same type. Compile-time error if `f` is absent in `r`.
-renameCol :: f@Str -> g@Str -> Table n r -> Table n ((r - f) + Singleton g (ProjectField r f))
+-- Rename a single column, in place. The renamed column keeps its
+-- position and its type; `ProjectField` is not needed because the pinned
+-- split already binds the element type as `a`. Compile-time error if `f`
+-- is absent.
+renameCol :: f@Str -> g@Str -> Table n (l + Singleton f a + r)
+                           -> Table n (l + Singleton g a + r)
 
 
 -------------------------------------------------------------------------------

@@ -3,54 +3,22 @@ module table.test (test)
 import table
 import vector
 import root
+import unittest
 
 -------------------------------------------------------------------------------
--- Type mappings for the Python pool that hosts the test framework.
+-- Type mappings for the Python pool that hosts the unittest harness.
 --
--- The test framework's sourced helpers (testEqual, printMsg, printResult)
--- receive table values over the wire as pyarrow.RecordBatch (the wire form
--- of a morloc Table in Python). Other languages running the suite (R, C++)
--- send their tables across the Arrow C Data Interface to the Python pool,
--- where they arrive as RecordBatch and are compared structurally.
+-- A Table reaches the harness as a pyarrow.RecordBatch (its wire form in
+-- Python). Other languages running the suite (R, C++) send their tables across
+-- the Arrow C Data Interface to the Python pool, where they are compared
+-- structurally.
 --
--- Vector maps to "numpy.ndarray" to stay consistent with vector-py (which
--- table-py transitively imports); morloc_setCol accepts a numpy array
--- directly, and the test framework's structural comparator reduces it to a
--- list before comparing column data.
+-- Vector maps to "list" so the harness compares column data as plain lists.
 
-type Py => Int = "int"
-type Py => Str = "str"
-type Py => Real = "float"
-type Py => Bool = "bool"
-type Py => Tuple2 a b = "tuple" a b
-type Py => List a = "list" a
 type Py => (Vector (n :: Nat) a) = "list" a
 type Py => (Table (n :: Nat) (r :: Rec)) = "arrow" n r
 
--------------------------------------------------------------------------------
--- Test framework
-
-source Py from "table-test.py" ("testEqual", "printMsg", "printResult")
-testEqual
-    :: Str
-    -> a
-    -> a
-    -> (Int, Int)
-    -> (Int, Int)
-printMsg :: Str -> a -> a
-printResult :: (Int, Int) -> (Int, Int)
-
-testGroup
-    :: Str
-    -> ((Int, Int) -> (Int, Int))
-    -> (Int, Int)
-    -> (Int, Int)
-testGroup msg tests = tests . printMsg msg
-
-passed :: (Int, Int) -> Bool
-passed t = 0 == (.0 t)
-
-test = runTests (0,0)
+test = suite runTests
 
 -------------------------------------------------------------------------------
 -- Shared fixtures
@@ -74,14 +42,14 @@ mkX n = asCol "x" xs3
 mkY :: Int -> Table n {y = Str}
 mkY n = asCol "y" ys3
 
-mkZ :: Int -> Table n {z = Real}
+mkZ :: Int -> Table n {z = Int}
 mkZ n = asCol "z" zs3
 
 mkXY :: Int -> Table n {x = Int, y = Str}
-mkXY n = setCol "y" ys3 (asCol "x" xs3)
+mkXY n = addCol "y" ys3 (asCol "x" xs3)
 
 mkXYZ3 :: Table n {x = Int, y = Str, z = Real}
-mkXYZ3 = setCol "z" zs3 (setCol "y" ys3 (asCol "x" xs3))
+mkXYZ3 = addCol "z" zs3 (addCol "y" ys3 (asCol "x" xs3))
 
 -------------------------------------------------------------------------------
 -- Test suite
@@ -89,30 +57,28 @@ mkXYZ3 = setCol "z" zs3 (setCol "y" ys3 (asCol "x" xs3))
 -- Group composition is right-to-left, so the printed order matches this
 -- block read top-to-bottom only after reversal.
 
-runTests :: (Int, Int) -> Bool
+runTests :: Test
 runTests =
-  ( passed
-  . printResult
-  . testGroup "Composition / derived" testDerived
-  . testGroup "rbind / cbind"         testConcat
-  . testGroup "renameCol"             testRenameCol
-  . testGroup "selectColsDyn"         testSelectColsDyn
-  . testGroup "selectCols"            testSelectCols
-  . testGroup "dropCols"              testDropCols
-  . testGroup "setCol"                testSetCol
-  . testGroup "getCol"                testGetCol
-  . testGroup "sortRows"              testSortRows
-  . testGroup "distinctRows"          testDistinctRows
-  . testGroup "pickRows"              testPickRows
-  . testGroup "filterRows"            testFilterRows
-  . testGroup "sliceRows"             testSliceRows
-  . testGroup "names"                 testNames
-  . testGroup "asCol / nrow / ncol"   testAsCol
+  ( group "Composition / derived" testDerived
+  . group "rbind / cbind"         testConcat
+  . group "renameCol"             testRenameCol
+  . group "selectColsDyn"         testSelectColsDyn
+  . group "selectCols"            testSelectCols
+  . group "dropCols"              testDropCols
+  . group "setCol"                testSetCol
+  . group "getCol"                testGetCol
+  . group "sortRows"              testSortRows
+  . group "distinctRows"          testDistinctRows
+  . group "pickRows"              testPickRows
+  . group "filterRows"            testFilterRows
+  . group "sliceRows"             testSliceRows
+  . group "names"                 testNames
+  . group "asCol / nrow / ncol"   testAsCol
   )
 
 -------------------------------------------------------------------------------
 -- asCol + introspection
-testAsCol :: (Int, Int) -> (Int, Int)
+testAsCol :: Test
 testAsCol =
   ( testEqual "asCol \"x\" xs3 == mkX 3"
         (asCol "x" xs3) (mkX 3)
@@ -126,7 +92,7 @@ testAsCol =
 
 -------------------------------------------------------------------------------
 -- names
-testNames :: (Int, Int) -> (Int, Int)
+testNames :: Test
 testNames =
   ( testEqual "names (mkX 3) = [\"x\"]"
         (names (mkX 3)) ["x"]
@@ -141,7 +107,7 @@ testNames =
 -- (start, end) with the half-open convention [start, end), so the
 -- behavior on out-of-range, reversed, and zero-length intervals is
 -- locked to the same rules as `slice` on lists.
-testSliceRows :: (Int, Int) -> (Int, Int)
+testSliceRows :: Test
 testSliceRows =
   let row0 = [0]       :: Vector 1 Int
       row1 = [1]       :: Vector 1 Int
@@ -185,7 +151,7 @@ testSliceRows =
 
 -------------------------------------------------------------------------------
 -- filterRows
-testFilterRows :: (Int, Int) -> (Int, Int)
+testFilterRows :: Test
 testFilterRows =
   let allTrue  = [True,  True,  True]  :: Vector 3 Bool
       allFalse = [False, False, False] :: Vector 3 Bool
@@ -204,7 +170,7 @@ testFilterRows =
 
 -------------------------------------------------------------------------------
 -- pickRows
-testPickRows :: (Int, Int) -> (Int, Int)
+testPickRows :: Test
 testPickRows =
   let identity = [0, 1, 2] :: Vector 3 Int
       reversed = [2, 1, 0] :: Vector 3 Int
@@ -227,7 +193,7 @@ testPickRows =
 
 -------------------------------------------------------------------------------
 -- distinctRows
-testDistinctRows :: (Int, Int) -> (Int, Int)
+testDistinctRows :: Test
 testDistinctRows =
   let allDup3   = [7, 7, 7] :: Vector 3 Int
       allDupTbl = asCol "x" allDup3 :: Table 3 {x = Int}
@@ -247,7 +213,7 @@ testDistinctRows =
 
 -------------------------------------------------------------------------------
 -- sortRows
-testSortRows :: (Int, Int) -> (Int, Int)
+testSortRows :: Test
 testSortRows =
   let xsR = [2, 1, 0] :: Vector 3 Int
   in
@@ -264,7 +230,7 @@ testSortRows =
 
 -------------------------------------------------------------------------------
 -- getCol
-testGetCol :: (Int, Int) -> (Int, Int)
+testGetCol :: Test
 testGetCol =
   ( testEqual "getCol \"x\" (mkX 3) == xs3"
         (getCol "x" (mkX 3) :: Vector 3 Int) xs3
@@ -276,23 +242,23 @@ testGetCol =
 
 -------------------------------------------------------------------------------
 -- setCol
-testSetCol :: (Int, Int) -> (Int, Int)
+testSetCol :: Test
 testSetCol =
   let zsR = [9.0, 9.0, 9.0] :: Vector 3 Real
       replaced = setCol "z" zsR mkXYZ3 :: Table 3 {x = Int, y = Str, z = Real}
-      expectReplaced = setCol "z" zsR (mkXY 3) :: Table 3 {x = Int, y = Str, z = Real}
+      expectReplaced = addCol "z" zsR (mkXY 3) :: Table 3 {x = Int, y = Str, z = Real}
   in
   ( testEqual "setCol \"y\" ys (mkX 3) == mkXY 3 (append new column)"
-        (setCol "y" ys3 (mkX 3)) (mkXY 3)
+        (addCol "y" ys3 (mkX 3)) (mkXY 3)
   . testEqual "setCol \"z\" zs (mkXY 3) == mkXYZ3 (append new column)"
-        (setCol "z" zs3 (mkXY 3)) mkXYZ3
+        (addCol "z" zs3 (mkXY 3)) mkXYZ3
   . testEqual "setCol \"z\" newZs mkXYZ3 replaces the existing z column"
         replaced expectReplaced
   )
 
 -------------------------------------------------------------------------------
 -- dropCols
-testDropCols :: (Int, Int) -> (Int, Int)
+testDropCols :: Test
 testDropCols =
   ( testEqual "dropCols [\"z\"] mkXYZ3 == mkXY 3"
         (dropCols ["z"] mkXYZ3) (mkXY 3)
@@ -304,7 +270,7 @@ testDropCols =
 
 -------------------------------------------------------------------------------
 -- selectCols
-testSelectCols :: (Int, Int) -> (Int, Int)
+testSelectCols :: Test
 testSelectCols =
   ( testEqual "selectCols [\"x\"] (mkXY 3) == mkX 3"
         (selectCols ["x"] (mkXY 3)) (mkX 3)
@@ -316,7 +282,7 @@ testSelectCols =
 
 -------------------------------------------------------------------------------
 -- selectColsDyn
-testSelectColsDyn :: (Int, Int) -> (Int, Int)
+testSelectColsDyn :: Test
 testSelectColsDyn =
   ( testEqual "selectColsDyn [\"x\"] mkXYZ3 == mkX 3"
         (selectColsDyn ["x"] mkXYZ3 :: Table 3 {x = Int}) (mkX 3)
@@ -326,7 +292,7 @@ testSelectColsDyn =
 
 -------------------------------------------------------------------------------
 -- renameCol
-testRenameCol :: (Int, Int) -> (Int, Int)
+testRenameCol :: Test
 testRenameCol =
   ( testEqual "renameCol \"x\" \"a\" (mkX 3) renames"
         (renameCol "x" "a" (mkX 3)) (asCol "a" xs3 :: Table 3 {a = Int})
@@ -336,7 +302,7 @@ testRenameCol =
 
 -------------------------------------------------------------------------------
 -- rbind / cbind
-testConcat :: (Int, Int) -> (Int, Int)
+testConcat :: Test
 testConcat =
   let xs6 = [0, 1, 2, 0, 1, 2] :: Vector 6 Int
       doubled = asCol "x" xs6 :: Table 6 {x = Int}
@@ -357,7 +323,7 @@ testConcat =
 -- Every removed primitive (head, tail, reverseRows) is reproduced via the
 -- new surface to verify the operation set is genuinely orthogonal.
 
-testDerived :: (Int, Int) -> (Int, Int)
+testDerived :: Test
 testDerived =
   let xs2  = [0, 1] :: Vector 2 Int
       tail2 = [1, 2] :: Vector 2 Int
