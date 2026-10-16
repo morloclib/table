@@ -1,6 +1,7 @@
 module table.test (test)
 
 import table
+import table-py (Table)
 import vector
 import root
 import unittest
@@ -14,9 +15,6 @@ import unittest
 -- structurally.
 --
 -- Vector maps to "list" so the harness compares column data as plain lists.
-
-type Py => (Vector (n :: Nat) a) = "list" a
-type Py => (Table (n :: Nat) (r :: Rec)) = "arrow" n r
 
 test = suite runTests
 
