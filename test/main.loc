@@ -1,8 +1,7 @@
 module table.test (test)
 
 import table
-import table-py (Table)
-import vector
+import vector-py
 import root
 import unittest
 
@@ -14,7 +13,13 @@ import unittest
 -- the Arrow C Data Interface to the Python pool, where they are compared
 -- structurally.
 --
--- Vector maps to "list" so the harness compares column data as plain lists.
+-- Vector comes from vector-py, which the harness needs to build vector
+-- literals in Python. The Table form is declared here rather than imported
+-- from table-py: an imported implementation module offers its functions to
+-- the suite, and the harness would then run the Python ones whatever
+-- language is under test.
+
+type Py => (Table (n :: Nat) (r :: Rec)) = "arrow" n r
 
 test = suite runTests
 
@@ -40,7 +45,7 @@ mkX n = asCol "x" xs3
 mkY :: Int -> Table n {y = Str}
 mkY n = asCol "y" ys3
 
-mkZ :: Int -> Table n {z = Int}
+mkZ :: Int -> Table n {z = Real}
 mkZ n = asCol "z" zs3
 
 mkXY :: Int -> Table n {x = Int, y = Str}
