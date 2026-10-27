@@ -7,7 +7,7 @@ import vector
 --' carries the row count; the phantom Rec slot carries the column-name/type
 --' schema. Cross-language transfer is zero-copy via the Arrow C Data
 --' Interface.
---' metavar: TABLE
+--' @metavar TABLE
 type Table (n :: Nat) (r :: Rec)
 
 -- Convert a vector into a single-column table whose column carries the
